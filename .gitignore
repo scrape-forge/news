@@ -1,0 +1,28 @@
+# compiled source #
+*.pyc
+*.xml
+
+news/__pycache__
+news/*.pyc
+news/spiders/__pycache__
+news/spiders/.*pyc
+# IDE #
+*.idea
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+
+# Environtment #
+*venv
+*env*
+*.json
+*build
+*dbs
+*logs
+*info
+*eggs
+*setup.py
+*.sh
