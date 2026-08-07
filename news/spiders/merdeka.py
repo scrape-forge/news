@@ -31,6 +31,7 @@ class MerdekaSpider(scrapy.Spider):
         item['title'] = self.get_title(response)
         item['link'] = response.url
         item['tags'] = self.get_tags(response)
+        item['category'] = item['tags'][0] if item.get('tags') else None
         item['source'] = self.name
         return item
 

@@ -158,6 +158,7 @@ class RSSBaseSpider(scrapy.Spider):
         item['date_post']            = dt_utc
         item['date_post_local_time'] = self._to_local_str(dt_utc)
         item['tags']                 = self.get_tags(entry)
+        item['category']             = self.get_category(entry)
         item['source']               = self.source or self.name
         item['summary']              = self.get_summary(entry)
         item['image_url']            = self.get_image(entry)
@@ -213,6 +214,11 @@ class RSSBaseSpider(scrapy.Spider):
             for c in categories
             if c.text and c.text.strip()
         ]
+
+    def get_category(self, entry) -> str | None:
+        """Extract primary category (defaults to first tag)."""
+        tags = self.get_tags(entry)
+        return tags[0] if tags else None
 
     def get_summary(self, entry) -> str | None:
         """

@@ -20,6 +20,7 @@ class NewsItem(scrapy.Item):
     date_post            = scrapy.Field()  # Publication datetime in UTC
     date_post_local_time = scrapy.Field()  # Raw local datetime string (WIB)
     link                 = scrapy.Field()  # Canonical article URL
+    category             = scrapy.Field()  # Primary category
     tags                 = scrapy.Field()  # List of tag/category strings
     source               = scrapy.Field()  # Spider name (e.g. 'detik', 'antara')
 

@@ -44,6 +44,7 @@ class SuaraSpider(scrapy.Spider):
             item['title'] = self.get_title(response)
             item['link'] = response.url
             item['tags'] = self.get_tags(response)
+            item['category'] = item['tags'][0] if item.get('tags') else None
             item['source'] = self.name
             if item['tags'] and item['date_post']:
                 yield item
