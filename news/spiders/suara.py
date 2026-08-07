@@ -16,12 +16,6 @@ class SuaraSpider(scrapy.Spider):
         'https://www.suara.com/indeks/terkini/news/{}'.format(year),
         'https://www.suara.com/indeks/terkini/bisnis/{}'.format(year),
     ]
-
-    async def start(self):
-        for url in self.start_urls:
-            yield scrapy.Request(url, callback=self.parse)
-
-            
     def parse(self, response):
         detail_pages = response.css('.article-kanal-info a::attr(href)').getall()
         for page in detail_pages:
