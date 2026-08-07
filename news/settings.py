@@ -64,7 +64,7 @@ USER_AGENT = 'Mozilla/5.0 (compatible; NewsScraper/2.0; +https://github.com/)'
 # Configure item pipelines — MongoDB enabled by default (v2.0)
 # Switch to ElasticSearchPipeline or enable both as needed
 ITEM_PIPELINES = {
-    'news.pipelines.NewsPipeline': 300,
+    # 'news.pipelines.NewsPipeline': 300,
     # 'news.pipelines.ElasticSearchPipeline': 500,
 }
 
