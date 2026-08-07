@@ -1,82 +1,43 @@
 # -*- coding: utf-8 -*-
-import scrapy
-import re
-from news.lib import remove_tabs, date_parse
-from news.items import NewsItem
-from datetime import datetime
+# v2.0 — Refactored to RSS (legal, stable)
+from news.spiders.base_rss import RSSBaseSpider
 
 
-class TempoSpider(scrapy.Spider):
-    name = 'tempo'
-    allowed_domains = ['tempo.co']
-    
-    custom_settings = {
-        'DOWNLOAD_DELAY': 2,
-    }
-    start_urls = ['https://tempo.co/indeks']
+class TempoSpider(RSSBaseSpider):
+    name    = 'tempo'
+    source  = 'tempo'
+    rss_url = [
+        {'url': 'https://rss.tempo.co/nasional', 'category': 'Nasional'},
+        {'url': 'https://rss.tempo.co/bisnis', 'category': 'Bisnis'},
+        {'url': 'https://rss.tempo.co/metro', 'category': 'Metro'},
+        {'url': 'https://rss.tempo.co/dunia', 'category': 'Dunia'},
+        {'url': 'https://rss.tempo.co/bola', 'category': 'Bola'},
+        {'url': 'https://rss.tempo.co/sport', 'category': 'Sport'},
+        {'url': 'https://rss.tempo.co/cantik', 'category': 'Cantik'},
+        {'url': 'https://rss.tempo.co/tekno', 'category': 'Tekno'},
+        {'url': 'https://rss.tempo.co/otomotif', 'category': 'Otomotif'},
+        {'url': 'https://rss.tempo.co/seleb', 'category': 'Seleb'},
+        {'url': 'https://rss.tempo.co/gaya', 'category': 'Gaya'},
+    ]
 
-    def parse(self, response):
-        for url in response.css('.text-card a::attr(href)').getall():
-            yield scrapy.Request(url=url, callback=self.parse_detail)
+    def get_image(self, entry) -> str | None:
+        """Tempo uses a custom <img> tag in their XML."""
+        img_url = entry.findtext('img')
+        if img_url:
+            return img_url.strip()
+        return super().get_image(entry)
 
-    def parse_detail(self, response):
-        if re.search('.*nasional\.tempo.*|.*bisnis\.tempo.*|.*metro\.tempo.*|.*dunia\.tempo.*', response.url):
-            item = NewsItem()
-            item['date_post'] = self.get_date(response)
-            item['date_post_local_time'] = self.get_date_post_local_time(
-                response)
-            item['author'] = self.get_author(response)
-            item['title'] = self.get_title(response)
-            item['link'] = response.url
-            item['tags'] = self.get_tags(response)
-            item['category'] = item['tags'][0] if item.get('tags') else None
-            item['source'] = self.name
-
-            if item['tags'] and item['date_post']:
-                yield item
-
-
-    def get_date_post_local_time(self, response):
-        date_string = response.css('span#date::text').get()
-        if not date_string:
-            date_string = response.css('.detail-title .date::text').get()
-        return date_string
-
-    def get_title(self, response):
-        title = response.css('#article h1 ::text').get()
-        if title:
-            title = title.replace('\t', '').replace('\r', '').strip()
-        else:
-            title = response.css('.detail-title h1::text').get()
-            if title:
-                title = title.replace('\t', '').replace('\r', '').strip()
-        return title
-
-    def get_author(self, response):
-        author = None
-        author_lst = response.css('#article #author ::text').getall()
-        author_lst = [re.sub('[\r\t\n]', '', x).lower()
-                      for x in author_lst]
-        author_lst = [x.replace('editor:', '').replace(
-            'reporter:', '').replace(' ', '') for x in author_lst]
-        author_lst = [x for x in author_lst if len(x) != 0]
-        if author_lst:
-            author = ' - '.join(author_lst).title()
-        else:
-            author = response.css(
-                '.detail-title > div > div:nth-child(2) > div > h4.title.bold > a > span::text').get()
-            if author:
-                author = author.title()
-        return author
-
-    def get_date(self, response):
-        date = self.get_date_post_local_time(response)
-        if date:
-            return date_parse(date)
-        return None
-
-    def get_tags(self, response):
-        tags = response.css('.box-tag-detail a::text').getall()
-        if tags:
-            return tags
-        return None
+    def get_tags(self, entry) -> list:
+        """
+        Tempo's RSS lacks <category> tags.
+        Extract it from the article link subdomain.
+        """
+        link = self.get_link(entry)
+        if link:
+            parts = link.split('/')
+            # e.g., https://nasional.tempo.co/read/...
+            if len(parts) > 2 and 'tempo.co' in parts[2]:
+                subdomain = parts[2].split('.')[0]
+                if subdomain != 'www':
+                    return [subdomain.title()]
+        return super().get_tags(entry)
