@@ -11,12 +11,12 @@ class OkezoneSpider(RSSBaseSpider):
     name    = 'okezone'
     source  = 'okezone'
     rss_url = [
-        'https://sindikasi.okezone.com/index.php/rss/0/RSS2.0',  # Breakingnews
-        'https://sindikasi.okezone.com/index.php/rss/1/RSS2.0',  # News
-        'https://sindikasi.okezone.com/index.php/rss/11/RSS2.0', # Economy
-        'https://sindikasi.okezone.com/index.php/rss/12/RSS2.0', # Lifestyle
-        'https://sindikasi.okezone.com/index.php/rss/13/RSS2.0', # Celebrity
-        'https://sindikasi.okezone.com/index.php/rss/14/RSS2.0', # Bola
-        'https://sindikasi.okezone.com/index.php/rss/2/RSS2.0',  # Sport
-        'https://sindikasi.okezone.com/index.php/rss/16/RSS2.0', # Techno
+        {'url': 'https://sindikasi.okezone.com/index.php/rss/0/RSS2.0',  'category': 'Breakingnews'},
+        {'url': 'https://sindikasi.okezone.com/index.php/rss/1/RSS2.0',  'category': 'News'},
+        {'url': 'https://sindikasi.okezone.com/index.php/rss/11/RSS2.0', 'category': 'Economy'},
+        {'url': 'https://sindikasi.okezone.com/index.php/rss/12/RSS2.0', 'category': 'Lifestyle'},
+        {'url': 'https://sindikasi.okezone.com/index.php/rss/13/RSS2.0', 'category': 'Celebrity'},
+        {'url': 'https://sindikasi.okezone.com/index.php/rss/14/RSS2.0', 'category': 'Bola'},
+        {'url': 'https://sindikasi.okezone.com/index.php/rss/2/RSS2.0',  'category': 'Sport'},
+        {'url': 'https://sindikasi.okezone.com/index.php/rss/16/RSS2.0', 'category': 'Techno'},
     ]

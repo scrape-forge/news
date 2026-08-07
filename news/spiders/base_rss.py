@@ -101,11 +101,19 @@ class RSSBaseSpider(scrapy.Spider):
         if not self.rss_url:
             raise ValueError(f'Spider "{self.name}" must define rss_url.')
 
-        urls = [self.rss_url] if isinstance(self.rss_url, str) else list(self.rss_url)
-        for url in urls:
+        urls = [self.rss_url] if isinstance(self.rss_url, (str, dict)) else list(self.rss_url)
+        for url_def in urls:
+            if isinstance(url_def, dict):
+                url = url_def['url']
+                feed_category = url_def.get('category')
+            else:
+                url = url_def
+                feed_category = None
+
             yield scrapy.Request(
                 url=url,
                 callback=self.parse,
+                meta={'feed_category': feed_category},
                 headers={
                     'Accept': 'application/rss+xml, application/xml, text/xml, */*',
                 },
@@ -130,7 +138,7 @@ class RSSBaseSpider(scrapy.Spider):
         self.logger.info(f'[{self.name}] {len(entries)} items found in {response.url}')
 
         for entry in entries:
-            news_item = self._build_item(entry)
+            news_item = self._build_item(entry, response)
             if news_item:
                 yield news_item
 
@@ -138,7 +146,7 @@ class RSSBaseSpider(scrapy.Spider):
     # Item builder                                                         #
     # ------------------------------------------------------------------ #
 
-    def _build_item(self, entry) -> NewsItem | None:
+    def _build_item(self, entry, response) -> NewsItem | None:
         """
         Build a NewsItem from a single RSS <item> element.
         Parses date once and shares the result across both date fields.
@@ -158,7 +166,7 @@ class RSSBaseSpider(scrapy.Spider):
         item['date_post']            = dt_utc
         item['date_post_local_time'] = self._to_local_str(dt_utc)
         item['tags']                 = self.get_tags(entry)
-        item['category']             = self.get_category(entry)
+        item['category']             = self.get_category(entry, response)
         item['source']               = self.source or self.name
         item['summary']              = self.get_summary(entry)
         item['image_url']            = self.get_image(entry)
@@ -215,10 +223,12 @@ class RSSBaseSpider(scrapy.Spider):
             if c.text and c.text.strip()
         ]
 
-    def get_category(self, entry) -> str | None:
-        """Extract primary category (defaults to first tag)."""
+    def get_category(self, entry, response) -> str | None:
+        """Extract primary category (defaults to first tag or explicit feed_category meta)."""
         tags = self.get_tags(entry)
-        return tags[0] if tags else None
+        if tags:
+            return tags[0]
+        return response.meta.get('feed_category')
 
     def get_summary(self, entry) -> str | None:
         """
