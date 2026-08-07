@@ -10,6 +10,11 @@ from urllib.parse import urlencode
 class DetikSpider(scrapy.Spider):
     name = 'detik'
     allowed_domains = ['detik.com']
+    
+    custom_settings = {
+        'DOWNLOAD_DELAY': 2,
+    }
+    
     base_url = 'https://news.detik.com/indeks'
     params = {
     'date': datetime.now().strftime("%m/%d/%Y")
@@ -37,7 +42,7 @@ class DetikSpider(scrapy.Spider):
 
         for page in range(2, last_page + 1):
             yield scrapy.Request(
-                self.start_urls[0] + "?page=" + str(page),
+                self.start_urls[0] + "&page=" + str(page),
                 callback=self.parse
             )
 

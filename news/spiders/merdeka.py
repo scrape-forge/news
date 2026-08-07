@@ -7,6 +7,10 @@ from news.items import NewsItem
 class MerdekaSpider(scrapy.Spider):
     name = 'merdeka'
     allowed_domains = ['merdeka.com']
+    
+    custom_settings = {
+        'DOWNLOAD_DELAY': 2,
+    }
     start_urls = [
         'https://www.merdeka.com/peristiwa',
         'https://www.merdeka.com/politik',

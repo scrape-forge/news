@@ -7,6 +7,10 @@ from urllib.parse import urlparse, urlsplit, urlunsplit
 class SuaraSpider(scrapy.Spider):
     name = 'suara'
     allowed_domains = ['www.suara.com']
+    
+    custom_settings = {
+        'DOWNLOAD_DELAY': 2,
+    }
     year = datetime.now().year
     start_urls = [       
         'https://www.suara.com/indeks/terkini/news/{}'.format(year),

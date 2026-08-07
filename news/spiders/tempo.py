@@ -9,6 +9,10 @@ from datetime import datetime
 class TempoSpider(scrapy.Spider):
     name = 'tempo'
     allowed_domains = ['tempo.co']
+    
+    custom_settings = {
+        'DOWNLOAD_DELAY': 2,
+    }
     start_urls = ['https://tempo.co/indeks']
 
     def parse(self, response):

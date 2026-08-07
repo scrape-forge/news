@@ -7,6 +7,10 @@ from datetime import datetime
 class Liputan6Spider(scrapy.Spider):
     name = 'liputan6'
     allowed_domains = ['www.liputan6.com']
+    
+    custom_settings = {
+        'DOWNLOAD_DELAY': 2,
+    }
     start_urls = [
         'http://www.liputan6.com/news',
         'http://www.liputan6.com/pilpres',

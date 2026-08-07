@@ -9,17 +9,27 @@ from news.lib import remove_tabs, date_parse
 class KompasSpider(scrapy.Spider):
     name = 'kompas'
     allowed_domains = ['kompas.com']
+    
+    custom_settings = {
+        'DOWNLOAD_DELAY': 2,
+    }
+    
     date = datetime.now().strftime('%Y-%m-%d')
     start_urls = ['https://news.kompas.com/search/{}'.format(date)]
 
     def parse(self, response):
-        for href in response.css('.article__list .article__asset a::attr(href)'):
-            yield scrapy.Request(url=href.get(), callback=self.parse_detail)
+        links = response.css('.article__list .article__asset a::attr(href)').getall()
+        if not links:
+            return
 
-        pages = response.css(
-            '.paging__link.paging__link--active::text')[-1].get()
-        pg_number = re.sub('.*{}\/([0-9])'.format(self.date), '\g<1>', pages)
-        yield response.follow(url='{}/{}'.format(self.start_urls[-1], int(pg_number) + 1))
+        for href in links:
+            yield scrapy.Request(url=href, callback=self.parse_detail)
+
+        pages = response.css('.paging__link.paging__link--active::text')
+        if pages:
+            pages = pages[-1].get()
+            pg_number = re.sub('.*{}\/([0-9])'.format(self.date), '\g<1>', pages)
+            yield response.follow(url='{}/{}'.format(self.start_urls[-1], int(pg_number) + 1))
 
     def parse_detail(self, response):
         item = NewsItem()
