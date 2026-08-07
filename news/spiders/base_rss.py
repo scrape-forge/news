@@ -96,7 +96,8 @@ class RSSBaseSpider(scrapy.Spider):
     # Scrapy lifecycle                                                     #
     # ------------------------------------------------------------------ #
 
-    def start_requests(self):
+    async def start(self):
+        """Scrapy 2.13+ async start — yields one Request per RSS feed URL."""
         if not self.rss_url:
             raise ValueError(f'Spider "{self.name}" must define rss_url.')
 
@@ -112,10 +113,17 @@ class RSSBaseSpider(scrapy.Spider):
 
     def parse(self, response):
         """Parse RSS XML and yield a NewsItem per <item>."""
+        # recover=True allows lxml to handle malformed XML gracefully
+        # (some feeds contain unescaped HTML entities or broken tags)
+        parser = etree.XMLParser(recover=True, encoding='utf-8')
         try:
-            root = etree.fromstring(response.body)
-        except etree.XMLSyntaxError as exc:
+            root = etree.fromstring(response.body, parser=parser)
+        except Exception as exc:
             self.logger.error(f'RSS XML parse error from {response.url}: {exc}')
+            return
+
+        if root is None:
+            self.logger.error(f'RSS XML root is None for {response.url} — skipping.')
             return
 
         entries = root.findall('.//item')
@@ -138,7 +146,6 @@ class RSSBaseSpider(scrapy.Spider):
         """
         link = self.get_link(entry)
         if not link:
-            self.logger.debug('Skipping RSS entry with no link.')
             return None
 
         # Parse date once — shared between date_post and date_post_local_time

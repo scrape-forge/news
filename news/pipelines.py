@@ -35,18 +35,16 @@ class NewsPipeline:
             mongo_db=crawler.settings.get('MONGO_DB', 'news'),
         )
 
-    def open_spider(self, spider):
+    def open_spider(self, spider=None):
         self.client = pymongo.MongoClient(self.mongo_uri)
         self.db = self.client[self.mongo_db]
-        spider.logger.info(f'MongoDB connected: {self.mongo_uri} / db={self.mongo_db}')
 
-    def close_spider(self, spider):
+    def close_spider(self, spider=None):
         self.client.close()
-        spider.logger.info('MongoDB connection closed.')
 
-    def process_item(self, item, spider):
+    def process_item(self, item, spider=None):
         # Derive collection name from source field (e.g. 'antara' → 'antara-news')
-        source = item.get('source', spider.name)
+        source = item.get('source') or (spider.name if spider else 'unknown')
         collection_name = f'{source}-news'
 
         # Upsert by link — prevents duplicate documents on repeated crawls
@@ -79,16 +77,14 @@ class ElasticSearchPipeline:
             es_unique_key=crawler.settings.get('ELASTICSEARCH_UNIQ_KEY', 'link'),
         )
 
-    def open_spider(self, spider):
+    def open_spider(self, spider=None):
         self.es = Elasticsearch(hosts=self.es_uri)
-        spider.logger.info(f'Elasticsearch connected: {self.es_uri} / index={self.es_index}')
 
-    def close_spider(self, spider):
+    def close_spider(self, spider=None):
         if self.es:
             self.es.close()
-        spider.logger.info('Elasticsearch connection closed.')
 
-    def process_item(self, item, spider):
+    def process_item(self, item, spider=None):
         unique_id = self._get_item_key(item)
         self.es.index(
             index=self.es_index,
