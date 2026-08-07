@@ -22,3 +22,15 @@ class TribunSpider(RSSBaseSpider):
                 return parts[3].title()
         
         return super().get_category(entry, response)
+
+    def get_tags(self, entry) -> list:
+        """
+        Tribun's RSS lacks <category> tags.
+        We populate the tags list with the extracted URL category so it isn't empty.
+        """
+        link = self.get_link(entry)
+        if link:
+            parts = link.split('/')
+            if len(parts) > 3 and 'tribunnews.com' in parts[2]:
+                return [parts[3].title()]
+        return super().get_tags(entry)
