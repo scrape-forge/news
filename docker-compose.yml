@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  news_scraper:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: prod
+    container_name: news_scraper_prod
+    restart: always
+    environment:
+      - POSTGRES_HOST=${POSTGRES_HOST:-postgres}
+      - POSTGRES_PORT=${POSTGRES_PORT:-5432}
+      - POSTGRES_DB=${POSTGRES_DB:-news_db}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - CRAWL_INTERVAL_HOURS=${CRAWL_INTERVAL_HOURS:-6}

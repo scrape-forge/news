@@ -33,6 +33,7 @@ from lxml import etree
 
 import scrapy
 from news.items import NewsItem
+from news.spiders.time_window import RecentWindowMixin
 
 
 # ---------------------------------------------------------------------------
@@ -53,6 +54,9 @@ _LOCAL_TZ     = pytz.timezone('Asia/Jakarta')
 _SUMMARY_MAX  = 500  # max chars for summary field
 
 
+from news.lib import clean_headline, clean_summary, normalize_tags, normalize_category
+
+
 def _strip_html(text: str) -> str:
     """Remove HTML tags and normalize whitespace from a string."""
     if not text:
@@ -62,11 +66,12 @@ def _strip_html(text: str) -> str:
     return text
 
 
+
 # ---------------------------------------------------------------------------
 # Base spider
 # ---------------------------------------------------------------------------
 
-class RSSBaseSpider(scrapy.Spider):
+class RSSBaseSpider(RecentWindowMixin, scrapy.Spider):
     """
     Reusable Scrapy base spider for consuming RSS/Atom feeds.
 
@@ -90,6 +95,9 @@ class RSSBaseSpider(scrapy.Spider):
         'DOWNLOAD_DELAY': 0,
         'AUTOTHROTTLE_ENABLED': False,
         'ROBOTSTXT_OBEY': False,
+        # RSS endpoints do not need browser impersonation. An empty override
+        # restores Scrapy's standard middleware chain and uses USER_AGENT.
+        'DOWNLOADER_MIDDLEWARES': {},
     }
 
     # ------------------------------------------------------------------ #
@@ -135,12 +143,29 @@ class RSSBaseSpider(scrapy.Spider):
             return
 
         entries = root.findall('.//item')
-        self.logger.info(f'[{self.name}] {len(entries)} items found in {response.url}')
+        accepted = 0
+        if not hasattr(self, '_seen_item_links'):
+            self._seen_item_links = set()
 
         for entry in entries:
             news_item = self._build_item(entry, response)
-            if news_item:
-                yield news_item
+            if not news_item or not self.is_in_window(news_item.get('date_post')):
+                continue
+            link = news_item.get('link')
+            if link in self._seen_item_links:
+                continue
+            self._seen_item_links.add(link)
+            accepted += 1
+            yield news_item
+
+        self.logger.info(
+            '[%s] %d/%d items within the last %d hours from %s',
+            self.name,
+            accepted,
+            len(entries),
+            self.lookback_hours,
+            response.url,
+        )
 
     # ------------------------------------------------------------------ #
     # Item builder                                                         #
@@ -158,19 +183,35 @@ class RSSBaseSpider(scrapy.Spider):
 
         # Parse date once — shared between date_post and date_post_local_time
         dt_utc = self.get_date_utc(entry)
+        category = self.get_category(entry, response)
+        feed_tags = self.get_tags(entry)
+        tags = [
+            tag
+            for tag in feed_tags
+            if not category or tag.casefold() != category.casefold()
+        ]
+
+        raw_title = self.get_title(entry) or ""
+        raw_summary = self.get_summary(entry) or ""
+
+        cleaned_title = clean_headline(raw_title)
+        cleaned_summary = clean_summary(raw_summary) if raw_summary else None
+        normalized_tags = normalize_tags(raw_tags=tags, title=cleaned_title, summary=cleaned_summary or "")
 
         item = NewsItem()
-        item['title']                = self.get_title(entry)
+        item['title']                = cleaned_title
         item['link']                 = link
         item['author']               = self.get_author(entry)
         item['date_post']            = dt_utc
         item['date_post_local_time'] = self._to_local_str(dt_utc)
-        item['tags']                 = self.get_tags(entry)
-        item['category']             = self.get_category(entry, response)
+        item['tags']                 = normalized_tags
+        item['category']             = normalize_category(category)
         item['source']               = self.source or self.name
-        item['summary']              = self.get_summary(entry)
+
+        item['summary']              = cleaned_summary
         item['image_url']            = self.get_image(entry)
         return item
+
 
     # ------------------------------------------------------------------ #
     # Field extractors (override in subclass to customise per source)     #

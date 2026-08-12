@@ -21,9 +21,9 @@ class NewsItem(scrapy.Item):
     date_post_local_time = scrapy.Field()  # Raw local datetime string (WIB)
     link                 = scrapy.Field()  # Canonical article URL
     category             = scrapy.Field()  # Primary category
-    tags                 = scrapy.Field()  # List of tag/category strings
+    tags                 = scrapy.Field()  # Publisher topic tags; may be empty
     source               = scrapy.Field()  # Spider name (e.g. 'detik', 'antara')
 
-    # --- Enriched fields (RSS sources only) ---
+    # --- Enriched fields (RSS and other structured sources) ---
     summary              = scrapy.Field()  # Short article excerpt/description
     image_url            = scrapy.Field()  # Thumbnail image URL

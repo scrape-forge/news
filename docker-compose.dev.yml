@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  news_scraper:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: dev
+    container_name: news_scraper_dev
+    volumes:
+      # Bind mount host directory (including .venv)
+      - .:/app
+    environment:
+      - POSTGRES_HOST=${POSTGRES_HOST:-localhost}
+      - POSTGRES_PORT=${POSTGRES_PORT:-5432}
+      - POSTGRES_DB=${POSTGRES_DB:-news_db}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - CRAWL_INTERVAL_HOURS=6
+      - GROQ_API_KEY=${GROQ_API_KEY}
+    stdin_open: true
+    tty: true
+    networks:
+      - databases-network
+
+networks:
+  databases-network:
+    external: true

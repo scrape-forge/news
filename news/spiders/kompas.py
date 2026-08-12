@@ -1,84 +1,76 @@
 # -*- coding: utf-8 -*-
+"""Kompas spider using its public news sitemap."""
+
+from datetime import timezone
+from urllib.parse import urlparse
+
 import scrapy
-import re
-from datetime import datetime
+
 from news.items import NewsItem
-from news.lib import remove_tabs, date_parse
+from news.spiders.structured_data import (
+    extract_article_data,
+    iter_news_sitemap_entries,
+    iter_sitemap_locations,
+)
+from news.spiders.time_window import LOCAL_TZ, RecentWindowMixin
 
 
-class KompasSpider(scrapy.Spider):
+class KompasSpider(RecentWindowMixin, scrapy.Spider):
     name = 'kompas'
     allowed_domains = ['kompas.com']
-    
+
     custom_settings = {
         'DOWNLOAD_DELAY': 2,
+        'DOWNLOADER_MIDDLEWARES': {},
     }
-    
-    date = datetime.now().strftime('%Y-%m-%d')
-    start_urls = ['https://news.kompas.com/search/{}'.format(date)]
+
+    start_urls = [
+        'https://www.kompas.com/sitemap.xml',
+        'https://news.kompas.com/sitemap-news-news.xml',
+    ]
 
     def parse(self, response):
-        links = response.css('.article__list .article__asset a::attr(href)').getall()
-        if not links:
+        locations = list(iter_sitemap_locations(response))
+        if locations:
+            for sitemap in locations:
+                url = sitemap['url'] or ''
+                if '/sitemap-news-' in url:
+                    yield scrapy.Request(
+                        url=url,
+                        callback=self.parse_sitemap,
+                    )
             return
 
-        for href in links:
-            yield scrapy.Request(url=href, callback=self.parse_detail)
+        yield from self.parse_sitemap(response)
 
-        pages = response.css('.paging__link.paging__link--active::text')
-        if pages:
-            pages = pages[-1].get()
-            pg_number = re.sub('.*{}\/([0-9])'.format(self.date), '\g<1>', pages)
-            yield response.follow(url='{}/{}'.format(self.start_urls[-1], int(pg_number) + 1))
+    def parse_sitemap(self, response):
+        for entry in iter_news_sitemap_entries(response):
+            if entry['url'] and self.is_in_window(entry['published_at']):
+                yield scrapy.Request(
+                    url=entry['url'],
+                    callback=self.parse_detail,
+                    cb_kwargs={'sitemap_data': entry},
+                )
 
-    def parse_detail(self, response):
+    def parse_detail(self, response, sitemap_data):
+        data = extract_article_data(response)
+        published_at = data['published_at'] or sitemap_data['published_at']
+        if not self.is_in_window(published_at):
+            return
+
+        subdomain = urlparse(response.url).netloc.split('.')[0]
+        category = data['category'] or subdomain.replace('-', ' ').title()
+
         item = NewsItem()
-        item['date_post'] = self.get_date(response)
-        item['date_post_local_time'] = self.get_date_post_local_time(response)
-        item['author'] = self.get_author(response)
-        item['title'] = self.get_title(response)
+        item['date_post'] = published_at.astimezone(timezone.utc)
+        local_time = published_at.astimezone(LOCAL_TZ)
+        item['date_post_local_time'] = local_time.strftime('%d-%m-%Y %H:%M')
+        item['author'] = data['author']
+        item['title'] = data['title'] or sitemap_data['title']
         item['link'] = response.url
-        item['tags'] = self.get_tags(response)
-        item['category'] = item['tags'][0] if item.get('tags') else None
+        item['category'] = category
+        item['tags'] = data['tags'] or sitemap_data['tags']
         item['source'] = self.name
+        item['summary'] = data['summary'][:500] if data['summary'] else None
+        item['image_url'] = data['image_url'] or sitemap_data['image_url']
         yield item
-
-    def get_author(self, response):
-        authors = (
-            response.css('.credit-title-name .credit-title-nameEditor::text').getall() or 
-            response.css('#editor > a::text').getall() 
-        )
-        if authors:
-            authors = [a.strip().replace(',','').title() for a in authors if a.strip()]
-            return ', '.join(authors)
-        return None
-
-    def get_title(self, response):
-        return response.css('h1.read__title::text').get()
-
-    def get_content(self, response):
-        content_lst = response.css('.read__content p::text').getall()
-        if content_lst:
-            content = '\n\n'.join(content_lst)
-            content = remove_tabs(content)
-            return content
-        return None
-
-    def get_date_post_local_time(self, response):
-        date = response.css('.read__header .read__time::text').get().replace('Kompas.com', '').replace(',', '').replace('-', '').strip()
-        if date:
-            return date
-        return None
-        
-
-    def get_date(self, response):
-        date = self.get_date_post_local_time(response)
-        if date:
-            return date_parse(date)
-        return None
-
-    def get_tags(self, response):
-        tags = response.css('.tagsCloud-tag li a::text').getall()
-        if tags:
-            return tags
-        return None

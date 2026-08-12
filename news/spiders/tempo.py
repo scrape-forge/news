@@ -27,10 +27,10 @@ class TempoSpider(RSSBaseSpider):
             return img_url.strip()
         return super().get_image(entry)
 
-    def get_tags(self, entry) -> list:
+    def get_category(self, entry, response) -> str | None:
         """
-        Tempo's RSS lacks <category> tags.
-        Extract it from the article link subdomain.
+        Tempo's RSS lacks a category element, so derive only the category
+        from the article subdomain. Do not expose it as a topical tag.
         """
         link = self.get_link(entry)
         if link:
@@ -39,5 +39,5 @@ class TempoSpider(RSSBaseSpider):
             if len(parts) > 2 and 'tempo.co' in parts[2]:
                 subdomain = parts[2].split('.')[0]
                 if subdomain != 'www':
-                    return [subdomain.title()]
-        return super().get_tags(entry)
+                    return subdomain.title()
+        return super().get_category(entry, response)

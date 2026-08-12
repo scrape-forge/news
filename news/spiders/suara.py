@@ -1,72 +1,77 @@
 # -*- coding: utf-8 -*-
+"""Suara spider using its public all-category news sitemaps."""
+
+from datetime import timezone
+from urllib.parse import urlparse
+
 import scrapy
-from datetime import datetime
-from news.lib import new_date_parse, remove_day, to_number_of_month
+
 from news.items import NewsItem
-from urllib.parse import urlparse, urlsplit, urlunsplit
-class SuaraSpider(scrapy.Spider):
+from news.spiders.structured_data import (
+    extract_article_data,
+    iter_news_sitemap_entries,
+    iter_sitemap_locations,
+)
+from news.spiders.time_window import LOCAL_TZ, RecentWindowMixin
+
+
+class SuaraSpider(RecentWindowMixin, scrapy.Spider):
     name = 'suara'
     allowed_domains = ['www.suara.com']
-    
+
     custom_settings = {
         'DOWNLOAD_DELAY': 2,
+        'DOWNLOAD_TIMEOUT': 60,
+        'RETRY_TIMES': 2,
+        'DOWNLOADER_MIDDLEWARES': {},
     }
-    year = datetime.now().year
-    start_urls = [       
-        'https://www.suara.com/indeks/terkini/news/{}'.format(year),
-        'https://www.suara.com/indeks/terkini/bisnis/{}'.format(year),
-    ]
+
+    async def start(self):
+        yield scrapy.Request(
+            url='https://www.suara.com/sitemap.xml',
+            callback=self.parse,
+        )
+
     def parse(self, response):
-        detail_pages = response.css('.article-kanal-info a::attr(href)').getall()
-        for page in detail_pages:
-            yield scrapy.Request(page+'?page=all', callback=self.parse_detail)
+        requested_category = getattr(self, 'category', None)
+        for sitemap in iter_sitemap_locations(response):
+            url = sitemap['url'] or ''
+            if not url.endswith('/sitemap-news.xml'):
+                continue
+            if requested_category:
+                sitemap_category = urlparse(url).path.strip('/').split('/')[0]
+                if sitemap_category != requested_category:
+                    continue
+            yield scrapy.Request(url=url, callback=self.parse_sitemap)
 
-        next_page = response.css('.pagination li.active +li')
-        if next_page:
-            parts = urlsplit(response.url)
-            base_url = urlunsplit((parts.scheme, parts.netloc, parts.path, '', ''))
-            page = base_url + next_page.css('::attr(href)').get()
-            yield scrapy.Request(page, callback=self.parse)
+    def parse_sitemap(self, response):
+        for entry in iter_news_sitemap_entries(response):
+            if entry['url'] and self.is_in_window(entry['published_at']):
+                yield scrapy.Request(
+                    url=entry['url'],
+                    callback=self.parse_detail,
+                    cb_kwargs={'sitemap_data': entry},
+                )
 
-    def parse_detail(self, response):
-        part_url = urlparse(response.url)
-        if part_url.netloc == self.allowed_domains[0]:
-            item = NewsItem()
-            item['date_post'] = self.get_date(response)
-            item['date_post_local_time'] = self.get_date_post_local_time(response)
-            item['author'] = self.get_author(response)
-            item['title'] = self.get_title(response)
-            item['link'] = response.url
-            item['tags'] = self.get_tags(response)
-            item['category'] = item['tags'][0] if item.get('tags') else None
-            item['source'] = self.name
-            if item['tags'] and item['date_post']:
-                yield item
+    def parse_detail(self, response, sitemap_data):
+        data = extract_article_data(response)
+        published_at = data['published_at'] or sitemap_data['published_at']
+        if not self.is_in_window(published_at):
+            return
 
-    def get_date_post_local_time(self, response):
-        new_time = response.css('.article-image span::text').get().replace(',','').replace('|','').split(' ')
-        new_time = [item for item in new_time if remove_day(item) and item.upper() != 'WIB' and item != '']
-        return '{}-{}-{} {}'.format(
-            new_time[0], 
-            to_number_of_month(new_time[1].lower()),
-            new_time[2],
-            new_time[3])
+        path_category = urlparse(response.url).path.strip('/').split('/')[0]
+        category = data['category'] or path_category.replace('-', ' ').title()
 
-    def get_author(self, response):
-        return response.css('.article-image h3 a::text').get().strip()
-    
-    def get_title(self, response):
-        return response.css('.article-image h1::text').get().strip()
-
-    def get_date(self, response):
-        date = self.get_date_post_local_time(response)
-        if date:
-            return new_date_parse(date)
-        return None
-
-    def get_tags(self, response):
-        tags = response.css('.article-tags a::text').getall()
-        if tags:
-            tags = [tag.replace('#','').strip() if '#' in tag else tag.strip() for tag in tags]
-            return tags
-        return None
+        item = NewsItem()
+        item['date_post'] = published_at.astimezone(timezone.utc)
+        local_time = published_at.astimezone(LOCAL_TZ)
+        item['date_post_local_time'] = local_time.strftime('%d-%m-%Y %H:%M')
+        item['author'] = data['author']
+        item['title'] = data['title'] or sitemap_data['title']
+        item['link'] = response.url
+        item['category'] = category
+        item['tags'] = data['tags'] or sitemap_data['tags']
+        item['source'] = self.name
+        item['summary'] = data['summary'][:500] if data['summary'] else None
+        item['image_url'] = data['image_url'] or sitemap_data['image_url']
+        yield item

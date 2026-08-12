@@ -1,118 +1,79 @@
 # -*- coding: utf-8 -*-
+"""Detik news spider backed by Detik's public RSS feed."""
+
+import asyncio
+
+import requests
 import scrapy
-import tldextract as tld
-from news.items import NewsItem
-from news.lib import has_numbers, remove_day, new_date_parse, to_number_of_month
-from datetime import datetime
-from urllib.parse import urlencode
+from scrapy.http import XmlResponse
+
+from news.spiders.base_rss import RSSBaseSpider
 
 
-class DetikSpider(scrapy.Spider):
+class DetikSpider(RSSBaseSpider):
     name = 'detik'
-    allowed_domains = ['detik.com']
-    
-    custom_settings = {
-        'DOWNLOAD_DELAY': 2,
-    }
-    
-    base_url = 'https://news.detik.com/indeks'
-    params = {
-    'date': datetime.now().strftime("%m/%d/%Y")
-    } 
-    start_urls = [
-        f"{base_url}?{urlencode(params)}"
+    source = 'detik'
+    rss_url = [
+        {'url': 'https://news.detik.com/rss', 'category': 'Berita'},
+        {'url': 'https://finance.detik.com/rss', 'category': 'Finance'},
+        {'url': 'https://hot.detik.com/rss', 'category': 'Hiburan'},
+        {'url': 'https://sport.detik.com/rss', 'category': 'Sport'},
+        {'url': 'https://inet.detik.com/rss', 'category': 'Teknologi'},
+        {'url': 'https://oto.detik.com/rss', 'category': 'Otomotif'},
+        {'url': 'https://travel.detik.com/rss', 'category': 'Travel'},
+        {'url': 'https://food.detik.com/rss', 'category': 'Kuliner'},
+        {'url': 'https://health.detik.com/rss', 'category': 'Kesehatan'},
+        {'url': 'https://wolipop.detik.com/rss', 'category': 'Lifestyle'},
     ]
 
-    def start_requests(self):
-        for url in self.start_urls:
-            yield scrapy.Request(url=url, callback=self.parse)
+    async def start(self):
+        """Fetch feeds through requests when Detik stalls Scrapy HTTP."""
+        results = await asyncio.gather(
+            *(self.fetch_feed(feed) for feed in self.rss_url),
+            return_exceptions=True,
+        )
+        for feed, result in zip(self.rss_url, results):
+            if isinstance(result, Exception):
+                self.logger.error(
+                    'Unable to fetch Detik feed %s: %s',
+                    feed['url'],
+                    result,
+                )
+                continue
+            for item in result:
+                yield item
 
-    def parse(self, response):
-        pages = response.css('.pagination a::attr(href)').getall()
-        
-        # Fix parsing last page dari URL format ?page=N
-        last_page = 1
-        for page_url in reversed(pages):
-            if 'page=' in page_url:
-                try:
-                    last_page = int(page_url.split("page=")[-1])
-                    break
-                except ValueError:
-                    continue
+    async def fetch_feed(self, feed):
+        url = feed['url']
+        headers = {
+            'User-Agent': self.settings.get('USER_AGENT'),
+            'Accept': 'application/rss+xml, application/xml, text/xml, */*',
+        }
 
-        for page in range(2, last_page + 1):
-            yield scrapy.Request(
-                self.start_urls[0] + "&page=" + str(page),
-                callback=self.parse
-            )
+        for attempt in range(3):
+            try:
+                response = await asyncio.to_thread(
+                    requests.get,
+                    url,
+                    headers=headers,
+                    timeout=(10, 60),
+                )
+                response.raise_for_status()
+                break
+            except requests.RequestException:
+                if attempt == 2:
+                    raise
+                await asyncio.sleep(attempt + 1)
 
-        urls = response.css('.media__title a::attr(href)').getall()
-        for href in urls:
-            subdomain = tld.extract(href).subdomain
-            if not has_numbers(subdomain):
-                yield scrapy.Request(href, callback=self.parse_detail)
-
-
-
-    def parse_detail(self, response):
-        url_tags = self.parse_from_tags(response)
-        for href in url_tags :
-            subdomain = tld.extract(href).subdomain
-            if not has_numbers(subdomain):
-                yield scrapy.Request(href, callback=self.parse_detail)
-
-        subdomain = tld.extract(response.url).subdomain
-        if not has_numbers(subdomain):
-            item = NewsItem()
-            item['date_post'] = self.get_date(response)
-            item['date_post_local_time'] = self.get_date_post_local_time(response)
-            item['author'] = self.get_author(response)
-            item['title'] = self.get_title(response)
-            item['link'] = response.url
-            item['tags'] = self.get_tags(response)
-            item['category'] = item['tags'][0] if item.get('tags') else None
-            item['source'] = self.name
-            yield item
-
-    def get_content(self, response):
-        return self.content_parse(response)
-
-    def content_parse(self, response):
-        result = ''
-        try:
-            result = response.css('.detail__body-text  ::text').getall()
-        except:
-            pass
-        return "".join(result)
-
-    def get_date(self, response):
-        date_str = self.get_date_post_local_time(response)
-        if date_str:
-            return new_date_parse(date_str)
-        return None
-
-    def get_date_post_local_time(self, response):
-        new_time = response.css('.detail__date::text').get().replace(',','').split(' ')
-        new_time = [item for item in new_time if remove_day(item) and item.upper() != 'WIB']
-        return '{}-{}-{} {}'.format(
-            new_time[0], 
-            to_number_of_month(new_time[1].lower()),
-            new_time[2],
-            new_time[3])
-
-    def get_author(self, response):
-        return response.css('.detail__author::text').get().replace('-', '').strip().title()
-
-    def get_title(self, response):
-        headers = response.css('.detail')
-        title = headers.css('h1::text').get()
-        return title.strip() if title is not None else None
-
-    def get_tags(self, response):
-        return response.css('.nav [dtr-evt="tag"] ::text').getall()
-
-    def parse_from_tags(self, response):
-        return response.css('.list.media_rows.list-berita article a::attr(href)').getall()
-
-
-
+        request = scrapy.Request(
+            url=url,
+            headers=headers,
+            meta={'feed_category': feed['category']},
+        )
+        rss_response = XmlResponse(
+            url=url,
+            body=response.content,
+            encoding=response.encoding or 'utf-8',
+            request=request,
+        )
+        return list(self.parse(rss_response))

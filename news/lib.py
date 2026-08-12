@@ -145,3 +145,230 @@ def remove_day(text):
     pattern = r'\b(' + '|'.join(days) + r')\b'
     result = re.sub(pattern, '', text, flags=re.IGNORECASE)
     return ' '.join(result.split())
+
+
+# Standardized Topic Pattern Dictionary (100% Free, runs locally in < 0.01ms)
+TOPIC_PATTERNS = {
+    'IKN': [r'\bikn\b', r'ibu kota nusantara', r'penajam paser'],
+    'Pilkada': [r'\bpilkada\b', r'\bcagub\b', r'\bcawagub\b', r'pemilihan kepala daerah'],
+    'Pemilu': [r'\bpemilu\b', r'\bcapres\b', r'\bcawapres\b', r'\bkpu\b'],
+    'Suku Bunga BI': [r'suku bunga', r'bi rate', r'bank indonesia rate'],
+    'Inflasi': [r'\binflasi\b', r'harga beras', r'indeks harga konsumen'],
+    'Ekonomi & Bisnis': [r'\bekonomi\b', r'\bbisnis\b', r'pasar modal', r'\bihsg\b', r'rupiah', r'investasi'],
+    'Politik & Hukum': [r'\bpolitik\b', r'\bhukum\b', r'\bkpk\b', r'mahkamah konstitusi', r'\bmk\b', r'\bdpr\b'],
+    'Teknologi & AI': [r'\bteknologi\b', r'\btekno\b', r'artificial intelligence', r'\bai\b', r'startup', r'gadget'],
+    'Otomotif': [r'\botomotif\b', r'mobil listrik', r'\bev\b', r'sepeda motor'],
+    'Kesehatan': [r'\bkesehatan\b', r'bpjs', r'penyakit', r'rumah sakit', r'dokter'],
+    'Olahraga': [r'sepakbola', r'\bbola\b', r'timnas', r'liga 1', r'badminton', r'olahraga'],
+    'Lifestyle & Hiburan': [r'lifestyle', r'hiburan', r'selebriti', r'film', r'musik', r'kuliner']
+}
+
+IGNORE_TAGS = {
+    'berita', 'terkini', 'detiknews', 'detikfinance', 'detikhot',
+    'detiksport', 'detikinet', 'detikoto', 'detik travel', 'home',
+    'news', 'artikel', 'update', 'utama'
+}
+
+
+def normalize_tags(raw_tags=None, title="", summary=""):
+    """
+    Standardizes messy portal tags + extracts high-value topic tags from title & summary.
+    Runs locally in < 0.01ms during crawl ingestion. Batch AI tagging is handled asynchronously by tag_worker.py.
+    """
+    normalized = set()
+
+    # 1. Clean existing raw tags from portal
+    if raw_tags:
+        if isinstance(raw_tags, str):
+            raw_tags = [raw_tags]
+        for tag in raw_tags:
+            clean = tag.strip().lower()
+            if clean and clean not in IGNORE_TAGS and len(clean) > 2:
+                normalized.add(tag.strip().title())
+
+    # 2. Rule-based topic extraction from title & summary
+    search_text = f"{title} {summary}".lower()
+    for topic, patterns in TOPIC_PATTERNS.items():
+        for pattern in patterns:
+            if re.search(pattern, search_text):
+                normalized.add(topic)
+                break
+
+    return sorted(list(normalized))
+
+
+CATEGORY_MAPPING = {
+    # 1. Ekonomi & Bisnis
+    'ekonomi': 'Ekonomi & Bisnis',
+    'economy': 'Ekonomi & Bisnis',
+    'ekonomi bisnis': 'Ekonomi & Bisnis',
+    'bisnis': 'Ekonomi & Bisnis',
+    'finance': 'Ekonomi & Bisnis',
+    'finansial': 'Ekonomi & Bisnis',
+    'market update': 'Ekonomi & Bisnis',
+    'inspirasi bisnis': 'Ekonomi & Bisnis',
+    'energi': 'Ekonomi & Bisnis',
+    'pertanian': 'Ekonomi & Bisnis',
+    'kripto': 'Ekonomi & Bisnis',
+
+    # 2. Politik & Hukum
+    'politik': 'Politik & Hukum',
+    'nasional': 'Politik & Hukum',
+    'kilas-kementerian': 'Politik & Hukum',
+    'kasuistika': 'Politik & Hukum',
+
+    # 3. Teknologi & Sains
+    'teknologi': 'Teknologi & Sains',
+    'tekno': 'Teknologi & Sains',
+    'techno': 'Teknologi & Sains',
+    'sains': 'Teknologi & Sains',
+
+    # 4. Olahraga
+    'sport': 'Olahraga',
+    'bola': 'Olahraga',
+    'sepak bola dunia': 'Olahraga',
+    'sepak bola indonesia': 'Olahraga',
+    'sepakbola dunia': 'Olahraga',
+    'liga champion': 'Olahraga',
+    'liga italia': 'Olahraga',
+    'liga spanyol': 'Olahraga',
+    'liga indonesia': 'Olahraga',
+    'motogp': 'Olahraga',
+    'sport lain': 'Olahraga',
+    'netting': 'Olahraga',
+
+    # 5. Internasional
+    'international': 'Internasional',
+    'internasional': 'Internasional',
+    'dunia': 'Internasional',
+
+    # 6. Regional & Daerah
+    'regional': 'Regional & Daerah',
+    'berita daerah': 'Regional & Daerah',
+    'daerah': 'Regional & Daerah',
+    'megapolitan': 'Regional & Daerah',
+    'metro': 'Regional & Daerah',
+    'metropolitan': 'Regional & Daerah',
+    'nusantara': 'Regional & Daerah',
+    'surabaya raya': 'Regional & Daerah',
+
+    # 7. Gaya Hidup & Edukasi
+    'lifestyle': 'Gaya Hidup & Edukasi',
+    'life': 'Gaya Hidup & Edukasi',
+    'fashion': 'Gaya Hidup & Edukasi',
+    'beauty': 'Gaya Hidup & Edukasi',
+    'food': 'Gaya Hidup & Edukasi',
+    'kuliner': 'Gaya Hidup & Edukasi',
+    'travel': 'Gaya Hidup & Edukasi',
+    'zodiak': 'Gaya Hidup & Edukasi',
+    'mom and kids': 'Gaya Hidup & Edukasi',
+    'edukasi': 'Gaya Hidup & Edukasi',
+    'pendidikan': 'Gaya Hidup & Edukasi',
+
+    # 8. Hiburan & Seleb
+    'entertainment': 'Hiburan & Seleb',
+    'showbiz': 'Hiburan & Seleb',
+    'seleb': 'Hiburan & Seleb',
+    'hiburan': 'Hiburan & Seleb',
+    'tv scoop': 'Hiburan & Seleb',
+    'hot gossip': 'Hiburan & Seleb',
+    'hot issue': 'Hiburan & Seleb',
+
+    # 9. Kesehatan
+    'kesehatan': 'Kesehatan',
+    'health': 'Kesehatan',
+
+    # 10. Religi & Humaniora
+    'islam digest': 'Religi & Humaniora',
+    'islam nusantara': 'Religi & Humaniora',
+    'ihram': 'Religi & Humaniora',
+    'filantropi khazanah': 'Religi & Humaniora',
+
+    # Ignored portal generic labels
+    'terkini': 'General',
+    'berita': 'General',
+    'news': 'General',
+    'top news': 'General',
+    'foto': 'General',
+}
+
+
+def normalize_category(raw_category: str) -> str:
+    """
+    Normalizes messy raw portal categories into clean 10 Master Categories.
+    Example: 'Ekonomi Bisnis' -> 'Ekonomi & Bisnis', 'tekno' -> 'Teknologi & Sains'.
+    """
+    if not raw_category:
+        return 'General'
+    
+    clean = raw_category.strip().lower()
+    if clean in CATEGORY_MAPPING:
+        return CATEGORY_MAPPING[clean]
+
+    # Partial matching for common sub-categories
+    if 'ekonomi' in clean or 'bisnis' in clean or 'finance' in clean:
+        return 'Ekonomi & Bisnis'
+    if 'politik' in clean or 'hukum' in clean:
+        return 'Politik & Hukum'
+    if 'tekno' in clean or 'sains' in clean:
+        return 'Teknologi & Sains'
+    if 'sport' in clean or 'bola' in clean:
+        return 'Olahraga'
+    if 'sehat' in clean or 'health' in clean:
+        return 'Kesehatan'
+    if 'hiburan' in clean or 'seleb' in clean:
+        return 'Hiburan & Seleb'
+
+    return raw_category.strip().title()
+
+
+
+
+
+import html
+from w3lib.html import remove_tags
+
+PORTAL_SUFFIX_RE = re.compile(
+    r'\s*[-|–]\s*(detiknews|detikfinance|detikhot|detikinet|detiksport|detikoto|detikfood|detikhealth|wolipop|kompas\.com|antaranews|liputan6\.com|tempo\.co|republika\.co\.id|sindonews|okezone|jawapos|suara\.com|merdeka\.com).*$',
+    re.IGNORECASE
+)
+
+DATELINE_RE = re.compile(
+    r'^\s*([A-Z\s]+,\s*(KOMPAS\.com|ANTARA|Liputan6\.com|Detikcom|Tempo\.co)\s*[-–—]\s*|ANTARA\s*[-–—]\s*)',
+    re.IGNORECASE
+)
+
+BACA_JUGA_RE = re.compile(r'baca juga:.*$', re.IGNORECASE)
+
+
+def clean_text(text: str) -> str:
+    """
+    Cleans raw Indonesian text:
+    - Unescapes HTML entities (&amp;, &quot;, &#39;)
+    - Removes HTML tags
+    - Replaces non-breaking spaces (\xa0) and normalizes whitespace
+    """
+    if not text:
+        return ""
+    text = html.unescape(text)
+    text = remove_tags(text)
+    text = text.replace('\xa0', ' ').replace('\t', ' ').replace('\r', '')
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
+
+
+def clean_headline(title: str) -> str:
+    """Cleans headlines by removing portal suffixes, watermarks, and html noise."""
+    text = clean_text(title)
+    text = PORTAL_SUFFIX_RE.sub('', text).strip()
+    if (text.startswith('"') and text.endswith('"')) or (text.startswith("'") and text.endswith("'")):
+        text = text[1:-1].strip()
+    return text
+
+
+def clean_summary(summary: str, max_chars: int = 500) -> str:
+    """Cleans summaries by removing datelines ('JAKARTA, KOMPAS.com - '), 'Baca Juga', and truncating."""
+    text = clean_text(summary)
+    text = DATELINE_RE.sub('', text).strip()
+    text = BACA_JUGA_RE.sub('', text).strip()
+    return text[:max_chars].strip()

@@ -19,6 +19,9 @@
 
 BOT_NAME = 'news'
 
+# Every spider emits articles from this rolling window only.
+NEWS_LOOKBACK_HOURS = 24
+
 SPIDER_MODULES = ['news.spiders']
 NEWSPIDER_MODULE = 'news.spiders'
 
@@ -30,7 +33,7 @@ CONCURRENT_REQUESTS = 16
 CONCURRENT_REQUESTS_PER_DOMAIN = 1  # Be a good citizen per domain
 
 # Configure a delay for requests — required for compliance (v2.0)
-# RSS spiders are exempt (they only hit the feed URL once)
+# RSS spiders override this because they only request public feed endpoints.
 DOWNLOAD_DELAY = 2
 
 # Disable cookies (not needed for news scraping)
@@ -61,25 +64,46 @@ FAKEUSERAGENT_PROVIDERS = [
 ]
 USER_AGENT = 'Mozilla/5.0 (compatible; NewsScraper/2.0; +https://github.com/)'
 
-# Configure item pipelines — MongoDB enabled by default (v2.0)
-# Switch to ElasticSearchPipeline or enable both as needed
+# Optional database pipelines. Enable these only when their services are
+# available. Use Scrapy's `-O` option for local JSON export.
+import os
+
+# --- PostgreSQL ---
+POSTGRES_HOST = os.getenv('POSTGRES_HOST', '')
+POSTGRES_PORT = int(os.getenv('POSTGRES_PORT', 5432))
+POSTGRES_DB = os.getenv('POSTGRES_DB', 'news_db')
+POSTGRES_USER = os.getenv('POSTGRES_USER', 'postgres')
+POSTGRES_PASSWORD = os.getenv('POSTGRES_PASSWORD', '')
+
+# Allowed Master Categories to persist. If empty, all categories are kept.
+ALLOWED_CATEGORIES = os.getenv(
+    'ALLOWED_CATEGORIES',
+    'Ekonomi & Bisnis,Politik & Hukum,Teknologi & Sains'
+)
+
 ITEM_PIPELINES = {
+    'news.pipelines.CategoryFilterPipeline': 100,
     # 'news.pipelines.NewsPipeline': 300,
     # 'news.pipelines.ElasticSearchPipeline': 500,
 }
 
+if POSTGRES_HOST or os.getenv('ENABLE_POSTGRES_PIPELINE', '').lower() in ('true', '1'):
+    ITEM_PIPELINES['news.pipelines.PostgresPipeline'] = 400
+
+
 # --- MongoDB ---
-MONGO_URI = 'mongodb://localhost:27017/'
-MONGO_DB = 'news'
+MONGO_URI = os.getenv('MONGO_URI', 'mongodb://localhost:27017/')
+MONGO_DB = os.getenv('MONGO_DB', 'news')
 
 # --- Elasticsearch ---
-ELASTICSEARCH_HOSTS = 'localhost'
-ELASTICSEARCH_PORT = '9200'
-ELASTICSEARCH_INDEX = 'news'
-ELASTICSEARCH_USERNAME = ''
-ELASTICSEARCH_PASSWORD = ''
+ELASTICSEARCH_HOSTS = os.getenv('ELASTICSEARCH_HOSTS', 'localhost')
+ELASTICSEARCH_PORT = os.getenv('ELASTICSEARCH_PORT', '9200')
+ELASTICSEARCH_INDEX = os.getenv('ELASTICSEARCH_INDEX', 'news')
+ELASTICSEARCH_USERNAME = os.getenv('ELASTICSEARCH_USERNAME', '')
+ELASTICSEARCH_PASSWORD = os.getenv('ELASTICSEARCH_PASSWORD', '')
 ELASTICSEARCH_TYPE = '_doc'
 ELASTICSEARCH_UNIQ_KEY = 'link'  # fixed: was 'url', item field is 'link'
+
 
 # Enable and configure the AutoThrottle extension (v2.0)
 # Automatically adjusts download delay based on server response times

@@ -1,14 +1,14 @@
 # PRD — News Scraper RSS Revamp
 **Project:** `scrape-forge/news`
-**Version:** 2.0
-**Date:** 2026-08-07
-**Status:** 🟡 Draft
+**Version:** 2.1
+**Date:** 2026-08-12
+**Status:** 🟡 In progress
 
 ---
 
 ## 1. Background & Problem Statement
 
-The current news scraper relies entirely on **HTML web scraping** for all 12 Indonesian news sources. This approach has several problems:
+The original news scraper relied entirely on **HTML web scraping** for all 12 Indonesian news sources. This approach had several problems:
 
 | Problem | Impact |
 |---|---|
@@ -16,11 +16,10 @@ The current news scraper relies entirely on **HTML web scraping** for all 12 Ind
 | `ROBOTSTXT_OBEY = False` — ignores robots.txt | Potential UU ITE violation |
 | No rate limiting — hammers servers | Risk of IP ban, potential UU ITE Pasal 30/33 |
 | CSS selectors break when sites redesign | Maintenance burden, data gaps |
-| 6 of 12 sources have no official RSS | Must keep scraping those selectively |
+| 4 of 12 sources have no usable public RSS | Must keep scraping those selectively |
 | Pipelines disabled by default | No data actually stored in current state |
-| `NewsPipeline` only handles 2 of 12 spiders | 10 spiders produce no stored output |
 
-**6 out of 12 sources already have working, official RSS feeds** that provide richer data (images, excerpts) than the current scrapers. These should be migrated immediately.
+**8 out of 12 sources have working publisher RSS feeds** that provide richer data (images, excerpts) than the HTML scrapers. Detik, Liputan6, and Tempo were added after their current feed URLs were validated with live items. The remaining sources use public news sitemaps for all-category discovery and rate-limited article pages for metadata; Jawapos's API is not used because it disallows crawlers.
 
 ---
 
@@ -49,31 +48,31 @@ The current news scraper relies entirely on **HTML web scraping** for all 12 Ind
 
 ## 3. Source Strategy
 
-### Group A — Replace with RSS (6 sources)
+### Group A — Replace with RSS (8 sources)
 
 > Full spider replacement. No HTML scraping needed.
 
 | Source | Spider File | RSS URL | RSS Quality |
 |---|---|---|---|
 | Antara | `antara.py` | `https://www.antaranews.com/rss/terkini.xml` | ✅ Rich (image, excerpt, content) |
+| Detik | `detik.py` | `https://news.detik.com/rss` | ✅ Rich (image, excerpt) |
 | Tribunnews | `tribun.py` | `https://www.tribunnews.com/rss` | ✅ Good (image, excerpt) |
-| Sindonews | `sindo.py` | `https://sindonews.com/feed` | ✅ Rich (image, excerpt, category) |
+| Sindonews | `sindo.py` | `https://sindikasi.sindonews.com/` | ✅ Rich (image, excerpt, category) |
 | Republika | `republika.py` | `https://www.republika.co.id/rss/nasional/` | ✅ Rich (author, image, content) |
-| Jawapos | `jawapos.py` | `https://www.jawapos.com/nasional/rss` | ✅ Good (already uses GraphQL) |
-| Okezone | `okezone.py` | `http://sindikasi.okezone.com/index.php/okezone/RSS2.0` | ✅ Good |
+| Okezone | `okezone.py` | `https://sindikasi.okezone.com/index.php/rss/0/RSS2.0` | ✅ Good |
+| Liputan6 | `liputan6.py` | `https://feed.liputan6.com/rss/news` | ✅ Rich (image, excerpt, category) |
+| Tempo | `tempo.py` | `https://rss.tempo.co/nasional` | ✅ Good (image, excerpt) |
 
-### Group B — Keep Scraper + Add Compliance (6 sources)
+### Group B — Public Sitemap + Rate-Limited Article Pages (4 sources)
 
 > No official RSS. Keep existing spider but fix settings and add rate limiting.
 
 | Source | Spider File | Why No RSS | Fix Required |
 |---|---|---|---|
-| Detik | `detik.py` | Discontinued ~2020 | Fix pagination bug, add delay |
-| Kompas | `kompas.py` | Discontinued | Fix infinite pagination |
-| Liputan6 | `liputan6.py` | 404 | Add rate limiting |
-| Merdeka | `merdeka.py` | 404 | Add rate limiting |
-| Tempo | `tempo.py` | 404 | Add rate limiting |
-| Suara | `suara.py` | 404 | Add rate limiting |
+| Jawapos | `jawapos.py` | Former RSS URLs redirect to HTML with zero items | Use public recent-post sitemap |
+| Kompas | `kompas.py` | Feed API requires a currently invalid API key | Use all public news sitemaps |
+| Merdeka | `merdeka.py` | `/feed` and `/rss` return 404 | Use all category news sitemaps |
+| Suara | `suara.py` | RSS paths redirect to non-feed pages | Use every category news sitemap |
 
 ---
 
@@ -101,7 +100,7 @@ class NewsItem(scrapy.Item):
     date_post            = scrapy.Field()   # Publication datetime (UTC)
     date_post_local_time = scrapy.Field()   # Raw local datetime string
     link                 = scrapy.Field()   # Canonical article URL
-    tags                 = scrapy.Field()   # List of tag/category strings
+    tags                 = scrapy.Field()   # Publisher topics; may be empty
     source               = scrapy.Field()   # Spider name
 
     # --- New fields from RSS ---
@@ -268,21 +267,21 @@ news/
     ├── __init__.py
     ├── base_rss.py           # NEW: reusable RSS base spider
     │
-    ├── # Group A — RSS spiders (minimal, extends base_rss)
+    ├── # Group A — 8 RSS spiders (minimal, extends base_rss)
     ├── antara.py             # REFACTORED
     ├── tribun.py             # REFACTORED
     ├── sindo.py              # REFACTORED
     ├── republika.py          # REFACTORED
-    ├── jawapos.py            # REFACTORED (drop GraphQL, use RSS)
     ├── okezone.py            # REFACTORED
+    ├── detik.py              # REFACTORED
+    ├── liputan6.py           # REFACTORED
+    ├── tempo.py              # REFACTORED
     │
-    └── # Group B — HTML scrapers (fixed + compliant)
-    ├── detik.py              # FIXED
-    ├── kompas.py             # FIXED
-    ├── liputan6.py           # MINOR FIX
-    ├── merdeka.py            # MINOR FIX
-    ├── tempo.py              # MINOR FIX
-    └── suara.py              # MINOR FIX
+    └── # Group B — public sitemap + rate-limited article spiders
+    ├── jawapos.py            # Recent-post sitemap
+    ├── kompas.py             # All news sitemaps
+    ├── merdeka.py            # All category news sitemaps
+    └── suara.py              # All category news sitemaps
 
 requirements.txt              # CLEANED
 dev-requirements.txt          # NEW
@@ -309,11 +308,12 @@ dev-requirements.txt          # NEW
 - [ ] Refactor `tribun.py` → RSS
 - [ ] Refactor `sindo.py` → RSS
 - [ ] Refactor `republika.py` → RSS
-- [ ] Refactor `jawapos.py` → RSS (drop GraphQL)
 - [ ] Refactor `okezone.py` → RSS
+- [x] Refactor `detik.py` → RSS
+- [x] Refactor `liputan6.py` → RSS
+- [x] Refactor `tempo.py` → RSS
 
 ### Phase 4 — Group B Spider Fixes (Day 4)
-- [ ] Fix `detik.py` pagination bug
 - [ ] Fix `kompas.py` infinite pagination
 - [ ] Fix `antara.py` over-fetching (now Group A, but fix pattern in others)
 - [ ] Add `custom_settings` rate limiting to all Group B spiders
@@ -331,16 +331,18 @@ dev-requirements.txt          # NEW
 
 | # | Criteria | How to Verify |
 |---|---|---|
-| AC-1 | All 6 Group A spiders read from RSS, not HTML | Code review — no CSS selectors |
+| AC-1 | All 8 Group A spiders read from RSS, not HTML | Code review — no CSS selectors |
 | AC-2 | `image_url` and `summary` populated for Group A | `scrapy crawl antara -o out.json` → check fields |
 | AC-3 | All 12 spiders store to correct MongoDB collection | Check DB: `{source}-news` collections exist |
 | AC-4 | Running same spider twice → no duplicate documents | `upsert=True` on `link` field |
 | AC-5 | `ROBOTSTXT_OBEY = True` in settings | Code review |
 | AC-6 | `DOWNLOAD_DELAY = 2` minimum in settings | Code review |
-| AC-7 | `RandomUserAgentMiddleware` enabled | Code review |
-| AC-8 | `detik` pagination produces valid URLs | Manual test + log check |
+| AC-7 | `RandomUserAgentMiddleware` enabled for HTML spiders | Code review |
+| AC-8 | `detik` RSS produces current, normalized items | Live crawl + field check |
 | AC-9 | `kompas` spider stops crawling when no more articles | Manual test — no infinite loop |
 | AC-10 | `pyes` and `ScrapyElasticSearch` removed from requirements | `pip check` passes |
+| AC-11 | Every spider emits only the rolling last 24 hours | Check oldest/newest exported `date_post` |
+| AC-12 | Group B discovers every publisher sitemap category | Inspect category coverage in crawl output |
 
 ---
 
@@ -352,7 +354,7 @@ dev-requirements.txt          # NEW
 | RSS feed URL changes | Low | High | Monitor feed health, add alert |
 | Group B sites block IP | Medium | Medium | Rate limiting + user-agent rotation |
 | Republika feed is stale (last seen: 5 Jul 2026) | High | Medium | Monitor `lastBuildDate`, alert if >24h old |
-| Jawapos RSS less data than GraphQL | Low | Low | Compare output, keep GraphQL if needed |
+| A publisher sitemap omits recent items | Low | Medium | Enforce detail-date checks and monitor daily item counts |
 
 ---
 

@@ -1,7 +1,0 @@
-# Development-only dependencies
-# These are NOT needed in production.
-#
-# Install: pip install -r dev-requirements.txt
-
-autopep8==1.6.0
-pycodestyle==2.8.0
