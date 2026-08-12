@@ -1,19 +1,19 @@
-# 📰 News Scraper v2.0
+# 📰 PAPAGON INSIGHT: Indonesian News Data & Intelligence Platform
 
-A hybrid RSS and web scraping framework built with [Scrapy](https://scrapy.org/) for collecting news articles from Indonesian news portals. Built for **educational and research purposes only**.
+A high-performance news scraping, cleaning, AI enrichment, and analytics platform built with [Scrapy](https://scrapy.org/), PostgreSQL, and Groq AI. Designed to deliver Bloomberg-style financial and political intelligence for Indonesia.
 
-> ⚠️ **Disclaimer**: This project is intended for educational purposes only. Always respect the Terms of Service of any website you interact with. The author is not responsible for any misuse of this tool.
+
+> 📋 **Product Requirement Document**: See [`docs/PRD.md`](docs/PRD.md) for full architecture and product specifications.
 
 ---
 
-## 🚀 Features (v2.0)
+## 🎯 Core Capabilities (PRD Objectives)
 
-- **Hybrid Architecture (Legal & Stable)**: Uses publisher RSS feeds for 8 sources, falling back to public news sitemaps and rate-limited article pages for the remaining 4.
-- **Compliance First**: `ROBOTSTXT_OBEY` enabled, dynamic download delays (`AUTOTHROTTLE`), and domain concurrency limits.
-- **Enriched Data**: Extracts `image_url` and `summary` (excerpts) natively from RSS feeds.
-- **Consistent Time Window**: Every spider emits articles from the most recent 24 hours across all configured categories.
-- **Unified Pipelines**: MongoDB and Elasticsearch pipelines that handle all 12 spiders with built-in deduplication.
-- **Rotating User-Agent**: Built-in via `scrapy-fake-useragent`.
+1. **"What happened now?"** ➔ Real-time 12-portal Indonesian news stream.
+2. **"What is the biggest issue now?"** ➔ Story clustering engine that aggregates breaking stories across publishers by article volume.
+3. **"What is the trend now?"** ➔ Sub-millisecond GIN-indexed tag cloud showing trending topics.
+4. **"What happened in economy based on data?"** ➔ Macroeconomic sentiment analysis (-1.0 to +1.0) and sector heatmaps powered by free Groq AI (`llama-3.1-8b-instant`).
+
 
 ---
 
