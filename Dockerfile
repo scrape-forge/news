@@ -69,4 +69,5 @@ FROM prod-base AS prod
 # Copy application source code directly into image
 COPY . /app
 
+ENTRYPOINT ["/bin/sh", "scripts/entrypoint.sh"]
 CMD ["python", "runner.py"]

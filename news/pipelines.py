@@ -182,10 +182,29 @@ class PostgresPipeline:
                 date_post_local VARCHAR(25),
                 summary TEXT,
                 image_url TEXT,
-                crawled_at TIMESTAMPTZ DEFAULT NOW()
+                crawled_at TIMESTAMPTZ DEFAULT NOW(),
+                sentiment_score DOUBLE PRECISION,
+                sentiment_label VARCHAR(20),
+                ai_bullets TEXT[],
+                entities JSONB,
+                sector VARCHAR(100),
+                ai_enriched_at TIMESTAMPTZ,
+                CONSTRAINT chk_news_sentiment_score
+                    CHECK (sentiment_score BETWEEN -1.0 AND 1.0),
+                CONSTRAINT chk_news_sentiment_label
+                    CHECK (sentiment_label IN ('Positive', 'Neutral', 'Negative'))
             );
+            ALTER TABLE news_articles
+                ADD COLUMN IF NOT EXISTS sentiment_score DOUBLE PRECISION,
+                ADD COLUMN IF NOT EXISTS sentiment_label VARCHAR(20),
+                ADD COLUMN IF NOT EXISTS ai_bullets TEXT[],
+                ADD COLUMN IF NOT EXISTS entities JSONB,
+                ADD COLUMN IF NOT EXISTS sector VARCHAR(100),
+                ADD COLUMN IF NOT EXISTS ai_enriched_at TIMESTAMPTZ;
             CREATE INDEX IF NOT EXISTS idx_news_source_date ON news_articles (source, date_post DESC);
             CREATE INDEX IF NOT EXISTS idx_news_date_post ON news_articles (date_post DESC);
+            CREATE INDEX IF NOT EXISTS idx_news_entities_gin ON news_articles USING GIN (entities);
+            CREATE INDEX IF NOT EXISTS idx_news_sector_date ON news_articles (sector, date_post DESC);
         """)
         self.conn.commit()
 
@@ -204,7 +223,11 @@ class PostgresPipeline:
             ON CONFLICT (link) DO UPDATE SET
                 title = EXCLUDED.title,
                 category = COALESCE(EXCLUDED.category, news_articles.category),
-                tags = EXCLUDED.tags,
+                tags = CASE
+                    WHEN news_articles.ai_enriched_at IS NOT NULL
+                        THEN news_articles.tags
+                    ELSE EXCLUDED.tags
+                END,
                 summary = COALESCE(EXCLUDED.summary, news_articles.summary),
                 image_url = COALESCE(EXCLUDED.image_url, news_articles.image_url);
         """

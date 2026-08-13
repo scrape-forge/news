@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   news_scraper:
     build:
@@ -15,3 +13,9 @@ services:
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
       - CRAWL_INTERVAL_HOURS=${CRAWL_INTERVAL_HOURS:-6}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - BATCH_SIZE=${BATCH_SIZE:-10}
+      - MAX_RPM=${MAX_RPM:-12}
+      - CRON_WORKERS=${CRON_WORKERS-enrich}
+      - WORKER_CRON_ENRICH=${WORKER_CRON_ENRICH:-*/1 * * * *}
+      - RUN_ENRICH_WORKER_AFTER_CRAWL=${RUN_ENRICH_WORKER_AFTER_CRAWL:-false}

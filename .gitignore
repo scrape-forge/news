@@ -18,6 +18,7 @@ __pycache__/
 # Environtment #
 *venv
 *env*
+!.env.example
 *.json
 *build
 *dbs
@@ -26,3 +27,4 @@ __pycache__/
 *eggs
 *setup.py
 *.sh
+!scripts/entrypoint.sh

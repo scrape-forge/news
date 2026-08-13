@@ -41,6 +41,7 @@ A high-performance news scraping, cleaning, AI enrichment, and analytics platfor
     ├── lib.py            # Date parsing utilities
     ├── pipelines.py      # MongoDB & Elasticsearch logic
     ├── settings.py       # Rate limits & pipeline config
+    ├── workers/          # Worker CLI and task-specific modules
     └── spiders/
         ├── base_rss.py   # Reusable RSS spider class
         ├── antara.py     # ...and 11 other spiders
@@ -84,6 +85,56 @@ source .venv/bin/activate
 scrapy crawl antara -O scraped_data/antara.json
 scrapy crawl detik -O scraped_data/detik.json
 ```
+
+### Background workers
+
+Workers share one command-line entry point while each kind of work lives in its
+own module:
+
+```bash
+# Enrich pending articles using environment defaults
+python -m news.workers enrich
+
+# Override limits for one run
+python -m news.workers enrich --batch-size 5 --max-requests 5
+```
+
+`BATCH_SIZE` and `MAX_RPM` remain supported as environment variables.
+Enrichment-worker instances use PostgreSQL `FOR UPDATE SKIP LOCKED` so concurrent
+instances do not select the same articles.
+
+Install the enrichment worker in the current user's crontab with its default schedule
+(every minute):
+
+```bash
+python scripts/install_worker_crontab.py enrich
+```
+
+The installer preserves unrelated cron jobs and can be rerun safely. Useful
+options include:
+
+```bash
+# Preview without changing the crontab
+python scripts/install_worker_crontab.py enrich --dry-run
+
+# Use a custom schedule
+python scripts/install_worker_crontab.py enrich \
+  --schedule "enrich=*/5 * * * *"
+
+# Remove only this project's enrichment-worker entry
+python scripts/install_worker_crontab.py enrich --remove
+```
+
+In production Docker images, the entrypoint installs cron automatically from
+`CRON_WORKERS`. Configure `WORKER_CRON_ENRICH` to change its schedule. Future
+workers only need a CLI registration and default schedule to become available
+to the same installer. Production Compose disables the post-crawl enrichment run
+by default so cron is the single scheduler; set `RUN_ENRICH_WORKER_AFTER_CRAWL=true`
+if you prefer both triggers.
+
+Each successful enrichment stores standardized tags, a `-1.0` to `1.0`
+sentiment score and label, two executive-summary bullets, named entities, sector,
+and the enrichment timestamp.
 
 ---
 

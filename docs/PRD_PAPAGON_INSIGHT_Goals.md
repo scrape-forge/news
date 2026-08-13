@@ -38,10 +38,10 @@ graph TD
     end
 
     subgraph 3. Asynchronous AI Enrichment (Cron Worker)
-        C -->|Fetch Un-enriched Items| D1[tag_worker.py - Hit-and-Run]
+        C -->|Fetch Un-enriched Items| D1[enrich_articles.py - Hit-and-Run]
         D1 -->|1 Batch Call per Min| D2[Groq Free API: llama-3.1-8b-instant]
         D2 -->|Return: Tags, Sentiment, Bullets, Entities, Sector| D1
-        D1 -->|Check rem_tpm < 1500 Safeguard| D3[Batch UPDATE SQL]
+        D1 -->|Check rem_tpm < 3000 Safeguard| D3[Batch UPDATE SQL]
         D3 --> C
     end
 
@@ -85,10 +85,10 @@ Articles outside these allowed categories are dropped prior to database insertio
 
 ## 4. Groq AI Data Enrichment Specification
 
-### 4.1 AI Worker Execution Flow (`scripts/tag_worker.py`)
+### 4.1 AI Worker Execution Flow (`python -m news.workers enrich`)
 - **Execution Model**: Asynchronous, cron-triggered Hit-and-Run script (`*/1 * * * *`).
 - **Model**: Groq Cloud Free Tier `llama-3.1-8b-instant`.
-- **Batching**: 10 to 15 articles per single API request.
+- **Batching**: 5 articles per API request to leave room for structured output.
 - **Execution Speed**: Zero artificial `time.sleep()` delays; operates at full speed until quota threshold.
 
 ### 4.2 Single Request Payload & Response Schema
@@ -117,7 +117,7 @@ In 1 single API call per batch, Groq returns:
 ### 4.3 Proactive Rate Limit Safeguard (HTTP 429 Prevention)
 Groq Free Tier enforces **6,000 Tokens Per Minute (TPM)** and **30 Requests Per Minute (RPM)**.
 - **Header Inspection**: Inspects `x-ratelimit-remaining-tokens` and `x-ratelimit-remaining-requests` after every call.
-- **Halting Threshold**: If `rem_tpm < 1500` (25% cushion) or `rem_rpm < 2`, the worker immediately halts further requests in that run and exits cleanly (`exit 0`).
+- **Halting Threshold**: If `rem_tpm < 3000` or `rem_rpm < 2`, the worker immediately halts further requests in that run and exits cleanly (`exit 0`).
 - **Result**: **0% HTTP 429 rate limit errors**.
 
 ---
@@ -146,7 +146,8 @@ CREATE TABLE IF NOT EXISTS news_articles (
     sentiment_label VARCHAR(20),                -- 'Positive', 'Negative', 'Neutral'
     ai_bullets TEXT[],                          -- 2-bullet executive summary
     entities JSONB,                             -- Extracted companies, people, locations
-    sector VARCHAR(50)                          -- Industry sector classification
+    sector VARCHAR(100),                        -- Industry sector classification
+    ai_enriched_at TIMESTAMPTZ                  -- Successful enrichment time
 );
 ```
 
@@ -179,7 +180,7 @@ CREATE TABLE IF NOT EXISTS news_articles (
 |---|---|---|---|
 | **Scrapy Spiders (12 Portals)** | ~80 MB | ~15% (during crawl) | ~30s per 6h cycle |
 | **Python Rule Normalizer (`lib.py`)** | ~0 MB | < 0.1% | < 0.01ms / item |
-| **Groq AI Tag Worker (`tag_worker.py`)** | ~15 MB | < 1.0% | ~1.2s / batch |
+| **Papagon Enrichment Worker (`enrich_articles.py`)** | ~15 MB | < 1.0% | ~1.2s / batch |
 | **PostgreSQL Database Engine** | ~120 MB | < 2.0% | < 1ms / query |
 | **Total VPS Footprint** | **~215 MB RAM** | **Minimal** | **Leaves 1.6 GB RAM Free** |
 
@@ -192,7 +193,7 @@ CREATE TABLE IF NOT EXISTS news_articles (
 - [x] PostgreSQL pipeline with upsert deduplication logic.
 - [x] 10 Master Category Taxonomy mapping (`normalize_category`).
 - [x] Category Filter Pipeline (`CategoryFilterPipeline`).
-- [x] Hit-and-Run Groq AI Tag Worker (`scripts/tag_worker.py`).
-- [x] Proactive TPM Safety Check (`rem_tpm < 1500`).
+- [x] Hit-and-Run Papagon enrichment worker (`python -m news.workers enrich`).
+- [x] Proactive TPM Safety Check (`rem_tpm < 3000`).
 - [x] GIN indexes on `tags` and Full-Text Search.
-- [ ] Schema update migration for AI enrichment fields (`sentiment_score`, `ai_bullets`, `entities`, `sector`).
+- [x] Schema update migration for AI enrichment fields (`sentiment_score`, `ai_bullets`, `entities`, `sector`).

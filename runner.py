@@ -17,6 +17,9 @@ SPIDERS = [
 ]
 
 INTERVAL_HOURS = int(os.getenv('CRAWL_INTERVAL_HOURS', '6'))
+RUN_ENRICH_WORKER_AFTER_CRAWL = os.getenv(
+    "RUN_ENRICH_WORKER_AFTER_CRAWL", "true"
+).lower() in {"1", "true", "yes", "on"}
 
 
 def run_all_spiders():
@@ -33,13 +36,16 @@ def run_all_spiders():
     elapsed = time.time() - start_time
     print(f"✅ [Scheduler] Crawl cycle completed in {elapsed:.1f} seconds.", flush=True)
 
-    # Run AI Tag Worker to batch-tag untagged articles
-    if os.getenv("GROQ_API_KEY"):
-        print("🤖 [Scheduler] Running Groq AI Tag Worker for newly scraped articles...", flush=True)
+    # Run Papagon Insight enrichment for newly scraped articles.
+    if RUN_ENRICH_WORKER_AFTER_CRAWL and os.getenv("GROQ_API_KEY"):
+        print("🤖 [Scheduler] Running Papagon Insight enrichment...", flush=True)
         try:
-            subprocess.run([sys.executable, "scripts/tag_worker.py"], check=False)
+            subprocess.run(
+                [sys.executable, "-m", "news.workers", "enrich"],
+                check=False,
+            )
         except Exception as exc:
-            print(f"⚠️ [Scheduler] Error running tag worker: {exc}", flush=True)
+            print(f"⚠️ [Scheduler] Error running enrichment worker: {exc}", flush=True)
 
 
 

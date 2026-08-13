@@ -173,7 +173,8 @@ IGNORE_TAGS = {
 def normalize_tags(raw_tags=None, title="", summary=""):
     """
     Standardizes messy portal tags + extracts high-value topic tags from title & summary.
-    Runs locally in < 0.01ms during crawl ingestion. Batch AI tagging is handled asynchronously by tag_worker.py.
+    Runs locally in < 0.01ms during crawl ingestion. Batch AI tagging is handled
+    asynchronously by ``python -m news.workers enrich``.
     """
     normalized = set()
 
